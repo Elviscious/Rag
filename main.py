@@ -1,4 +1,4 @@
-import asyncio
+from pydantic import BaseModel
 from fastapi import FastAPI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_chroma import Chroma
@@ -10,6 +10,8 @@ import os
 
 load_dotenv()
 
+app = FastAPI()
+ 
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
     temperature="0.5",
@@ -33,8 +35,7 @@ retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
 system_prompt = """
 You are a helpful AI assistant that helps people find information.
 Answer the questions truthfully and strictly based on the context given.
-**IMPORTANT:** If the answer is not found in the context provided, you MUST reply with the phrase: 'I cannot answer that question as the relevant information is not in my sources.'
-Avoid adding unrelated or made-up information.
+**IMPORTANT:** If the answer is not found in the context provided or there is no provided context, you MUST reply with the phrase: 'I cannot answer that question as the relevant information is not in my sources.'
 """
 
 template = """
@@ -85,17 +86,15 @@ def ask_rag(question):
     }
 
 
-question = "What is Levenshtein distance?"
-result = ask_rag(question)
 
-print("Answer:\n", result["answer"])
-print("\nSources:")
-unique_sources = set()
+class QuestionRequest(BaseModel):
+    question: str
 
-for doc in result["source_documents"]:
-    source = doc.metadata.get("source", "unknown")
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the RAG API. Use the /ask endpoint to ask questions."}
 
-    unique_sources.add(source)
-
-for src in unique_sources:
-    print("-", src)
+@app.post("/ask")
+def ask_question(request: QuestionRequest):
+    result = ask_rag(request.question)
+    return {"answer": result["answer"]}
